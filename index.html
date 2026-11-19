@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="회의녹음">
+<meta name="theme-color" content="#2f5d50">
+<title>회의 녹음 받아쓰기</title>
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --muted:#6b6a66; --line:#e3e1db;
+    --accent:#2f5d50; --accent-soft:#e6efeb; --rec:#c8432f; --rec-soft:#fbeae6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#161615; --card:#201f1e; --ink:#ecebe7; --muted:#9c9a94; --line:#34322f;
+      --accent:#7fb8a5; --accent-soft:#22302b; --rec:#ef7a66; --rec-soft:#3a2420; }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif;font-size:16px;line-height:1.6;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .wrap{max-width:680px;margin:0 auto;padding:18px 16px 40px}
+  h1{font-size:22px;margin:6px 0 2px}
+  .sub{margin:0 0 16px;color:var(--muted);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  details summary{cursor:pointer;font-weight:600;font-size:15px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  textarea{resize:vertical;min-height:260px}
+  .recwrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0 4px}
+  .recbtn{width:120px;height:120px;border-radius:50%;border:none;background:var(--rec);color:#fff;font:inherit;font-size:17px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(200,67,47,.3)}
+  .recbtn.on{background:var(--rec-soft);color:var(--rec);box-shadow:0 0 0 8px var(--rec-soft);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{box-shadow:0 0 0 14px transparent}}
+  .timer{font-variant-numeric:tabular-nums;font-size:22px;font-weight:600}
+  .status{font-size:13px;color:var(--muted);min-height:1.4em;text-align:center}
+  .partial{color:var(--muted);font-style:italic;min-height:1.6em;font-size:15px;margin:10px 2px 4px}
+  .meta{font-size:12px;color:var(--muted);text-align:right;margin-top:4px}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:12px;cursor:pointer;text-align:center;text-decoration:none}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;grid-column:1/-1}
+  .note{font-size:13px;color:var(--muted);background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin-top:10px}
+  .note.warn{background:var(--rec-soft);color:var(--rec)}
+  .hidden{display:none!important}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
+  .modal .box{background:var(--card);border-radius:14px;padding:20px;max-width:340px;width:100%}
+  .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:20;max-width:90%;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>회의 녹음 받아쓰기</h1>
+  <p class="sub">녹음하면 글자로 바뀌어요. 끝나면 'Claude용 복사'를 눌러 Claude에 붙여넣으세요.</p>
+
+  <div id="unsupported" class="card note warn hidden">
+    이 브라우저에서는 음성 받아쓰기를 쓸 수 없어요. 아이폰이라면 <b>사파리</b>로 열어 주세요.
+    홈 화면 아이콘으로 열었을 때 안 되면 사파리에서 주소를 직접 여세요.
+  </div>
+
+  <section class="card">
+    <div class="recwrap">
+      <button id="recBtn" class="recbtn">녹음 시작</button>
+      <div id="timer" class="timer">00:00</div>
+      <div id="status" class="status">버튼을 누르면 마이크 허용 창이 떠요</div>
+    </div>
+    <div id="partial" class="partial"></div>
+    <textarea id="transcript" placeholder="받아쓴 내용이 여기에 쌓여요. 직접 고쳐도 돼요."></textarea>
+    <div id="count" class="meta">0자</div>
+    <div class="btns">
+      <button id="copyClaude" class="btn primary">Claude용 복사 (회의록 요청문 포함)</button>
+      <button id="copyRaw" class="btn">글만 복사</button>
+      <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claude 열기</a>
+      <button id="resetBtn" class="btn" style="grid-column:1/-1">새 회의 (지우기)</button>
+    </div>
+    <div class="note">녹음 중에는 화면을 켜 두고 이 화면에 머물러 주세요. 잠금되거나 다른 앱으로 가면 받아쓰기가 멈춰요. 내용은 이 휴대폰에만 자동 저장돼요.</div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>회의 정보·양식 (선택)</summary>
+      <label for="title">회의명</label>
+      <input id="title" placeholder="비워 두면 Claude가 내용으로 정해요">
+      <label for="people">참석자</label>
+      <input id="people" placeholder="예: 김과장, 이주무관">
+      <label for="place">장소</label>
+      <input id="place" placeholder="예: 3층 소회의실">
+      <label for="format">회의록 양식</label>
+      <select id="format">
+        <option value="official">공문서형 회의 결과보고 (개조식)</option>
+        <option value="general">일반 회의록 (개요·논의·결정·할 일)</option>
+        <option value="brief">간단 요약 (핵심 5줄 + 할 일)</option>
+      </select>
+      <label><input type="checkbox" id="stamp" checked style="width:auto;vertical-align:middle;margin-right:6px">문장마다 시각 표시 [14:05]</label>
+    </details>
+  </section>
+</div>
+
+<div id="modal" class="modal hidden">
+  <div class="box">
+    <p style="margin:0 0 14px">받아쓴 내용을 모두 지우고 새 회의를 시작할까요?</p>
+    <div class="btns" style="margin-top:0">
+      <button id="modalYes" class="btn" style="background:var(--rec);border-color:var(--rec);color:#fff">지우기</button>
+      <button id="modalNo" class="btn">취소</button>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const ta = $('transcript');
+const KEY = 'meeting-recorder-v1';
+const fields = ['title','people','place','format'];
+
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.remove('hidden'); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.add('hidden'),2000); }
+function p2(n){ return String(n).padStart(2,'0'); }
+function clock(){ const d=new Date(); return p2(d.getHours())+':'+p2(d.getMinutes()); }
+function fmt(ms){ const s=Math.floor(ms/1000), h=Math.floor(s/3600); return (h?h+':':'')+p2(Math.floor(s/60)%60)+':'+p2(s%60); }
+
+/* 저장 */
+function save(){ try{ const d={text:ta.value,elapsed,started:meetingStart}; fields.forEach(f=>d[f]=$(f).value); d.stamp=$('stamp').checked; localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
+function load(){ try{ const d=JSON.parse(localStorage.getItem(KEY)||'null'); if(!d) return;
+  ta.value=d.text||''; elapsed=d.elapsed||0; meetingStart=d.started||null; fields.forEach(f=>{ if(d[f]!=null) $(f).value=d[f]; }); if(d.stamp!=null) $('stamp').checked=d.stamp;
+  $('timer').textContent=fmt(elapsed); if(elapsed>0) $('recBtn').textContent='이어서 녹음'; }catch(e){} }
+function count(){ $('count').textContent=ta.value.length.toLocaleString()+'자'; }
+ta.addEventListener('input',()=>{count();save();});
+fields.forEach(f=>$(f).addEventListener('change',save)); $('stamp').addEventListener('change',save);
+
+/* 받아쓰기 */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec=null, wantOn=false, running=false, elapsed=0, segStart=0, tick=null, pending='', meetingStart=null, wakeLock=null, restarts=0;
+
+function appendText(text){
+  text=(text||'').trim(); if(!text) return;
+  const line = ($('stamp').checked ? '['+clock()+'] ' : '') + text;
+  ta.value += (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + line;
+  ta.scrollTop = ta.scrollHeight; count(); save();
+}
+function setStatus(m){ $('status').textContent=m; }
+function uiOn(on){
+  $('recBtn').classList.toggle('on',on);
+  $('recBtn').textContent = on ? '녹음 중지' : (elapsed>0 ? '이어서 녹음' : '녹음 시작');
+  clearInterval(tick);
+  if(on){ segStart=Date.now(); tick=setInterval(()=>{$('timer').textContent=fmt(elapsed+Date.now()-segStart);},500); }
+}
+async function keepAwake(on){
+  try{
+    if(on && 'wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); }
+    if(!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+
+function makeRec(){
+  const r = new SR();
+  r.lang='ko-KR'; r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
+  r.onstart=()=>{ running=true; setStatus('듣고 있어요…'); };
+  r.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i], t=res[0].transcript;
+      if(res.isFinal){ appendText(t); pending=''; } else interim+=t;
+    }
+    pending=interim; $('partial').textContent=interim;
+    restarts=0;
+  };
+  r.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      wantOn=false; setStatus('마이크가 허용되지 않았어요. 설정 > Safari > 마이크에서 허용해 주세요.');
+    } else if(e.error==='no-speech'){ setStatus('말소리가 없어서 다시 듣는 중…'); }
+    else if(e.error==='network'){ setStatus('인터넷 연결을 확인해 주세요. 다시 연결 중…'); }
+  };
+  r.onend=()=>{
+    running=false;
+    if(pending){ appendText(pending); pending=''; $('partial').textContent=''; }
+    if(wantOn){
+      restarts++;
+      if(restarts>8){ stopRec('받아쓰기가 계속 끊겨요. 버튼을 다시 눌러 주세요.'); return; }
+      setTimeout(()=>{ if(wantOn){ try{ rec.start(); }catch(err){ rec=makeRec(); try{ rec.start(); }catch(e2){ stopRec('다시 시작하지 못했어요. 버튼을 다시 눌러 주세요.'); } } } }, 250);
+    }
+  };
+  return r;
+}
+function startRec(){
+  if(!SR){ $('unsupported').classList.remove('hidden'); toast('이 브라우저는 받아쓰기를 지원하지 않아요'); return; }
+  if(!meetingStart) meetingStart=Date.now();
+  if(!ta.value && $('stamp').checked){ /* nothing */ }
+  wantOn=true; restarts=0; rec=makeRec();
+  try{ rec.start(); }catch(e){}
+  uiOn(true); keepAwake(true); setStatus('마이크 연결 중…');
+}
+function stopRec(msg){
+  if(wantOn || running){ elapsed += Date.now()-segStart; }
+  wantOn=false; uiOn(false); keepAwake(false);
+  try{ rec && rec.stop(); }catch(e){}
+  setStatus(msg || '멈췄어요. 이어서 녹음할 수 있어요.'); save();
+}
+$('recBtn').addEventListener('click',()=>{ wantOn ? stopRec() : startRec(); });
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden && wantOn){ stopRec('화면을 벗어나서 멈췄어요. "이어서 녹음"을 눌러 주세요.'); }
+  else if(!document.hidden && !wantOn){ /* 사용자가 직접 다시 눌러야 함 */ }
+});
+
+/* 복사 */
+const FORMAT_TEXT = {
+  official:'한국 공공기관 "회의 결과보고" 형식, 개조식(□ ○ -)으로, 문장은 "~함/~임/~예정"으로 끝나게 작성해줘. 구성: 회의 개요(일시·장소·참석자·안건) / 주요 논의 내용 / 결정 사항 / 향후 조치 계획(표: 조치 사항·담당·기한) / 행정 참고 사항.',
+  general:'일반 회의록으로 작성해줘. 구성: 회의 개요 / 주요 논의 내용 / 결정 사항 / 할 일(표: 할 일·담당자·기한) / 추가 확인 필요 사항.',
+  brief:'짧게 정리해줘. 구성: 핵심 요약 5줄 이내 / 결정 사항 / 할 일(표: 할 일·담당자·기한).'
+};
+function dateLabel(){ const d=new Date(meetingStart||Date.now()); return d.getFullYear()+'.'+p2(d.getMonth()+1)+'.'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+function claudeText(){
+  return `아래는 회의를 음성 인식으로 받아쓴 내용이야. 오탈자·띄어쓰기는 문맥으로 바로잡되, 원문에 없는 사실·숫자·결정은 지어내지 말고 불확실하면 "(확인 필요)"로 표시해줘. 담당자나 기한이 없으면 "미정"으로 써줘.
+
+${FORMAT_TEXT[$('format').value]}
+
+[회의 정보]
+- 회의명: ${$('title').value || '(내용으로 추정)'}
+- 일시: ${dateLabel()}
+- 장소: ${$('place').value || '(미입력)'}
+- 참석자: ${$('people').value || '(원문에서 드러난 사람만)'}
+
+[받아쓴 원문]
+${ta.value.trim()}`;
+}
+async function copy(text, okMsg){
+  if(!ta.value.trim()){ toast('아직 받아쓴 내용이 없어요'); return; }
+  try{ await navigator.clipboard.writeText(text); toast(okMsg); }
+  catch(e){
+    const tmp=document.createElement('textarea'); tmp.value=text; tmp.setAttribute('readonly',''); tmp.style.position='fixed'; tmp.style.opacity='0';
+    document.body.appendChild(tmp); tmp.select(); tmp.setSelectionRange(0,text.length);
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(_){}
+    document.body.removeChild(tmp); toast(ok?okMsg:'복사하지 못했어요. 글을 길게 눌러 직접 복사해 주세요');
+  }
+}
+$('copyClaude').addEventListener('click',()=>{ if(wantOn) stopRec(); copy(claudeText(),'복사했어요. Claude에 붙여넣으세요'); });
+$('copyRaw').addEventListener('click',()=>copy(ta.value,'받아쓴 글을 복사했어요'));
+
+/* 초기화 */
+$('resetBtn').addEventListener('click',()=>$('modal').classList.remove('hidden'));
+$('modalNo').addEventListener('click',()=>$('modal').classList.add('hidden'));
+$('modalYes').addEventListener('click',()=>{
+  $('modal').classList.add('hidden'); if(wantOn) stopRec();
+  ta.value=''; ['title','people','place'].forEach(f=>$(f).value=''); elapsed=0; meetingStart=null;
+  $('timer').textContent='00:00'; $('recBtn').textContent='녹음 시작'; $('partial').textContent=''; setStatus('새 회의를 시작할 수 있어요'); count(); save();
+});
+
+if(!SR) $('unsupported').classList.remove('hidden');
+load(); count();
+</script>
+</body>
+</html>
